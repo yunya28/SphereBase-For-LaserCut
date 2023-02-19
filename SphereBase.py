@@ -46,7 +46,7 @@ class InputDialog(QtWidgets.QDialog):
         layout.addLayout(input_form)
 
         help_label = QtWidgets.QLabel()
-        help_pixmap = QtGui.QPixmap("spherebase_help.png")
+        help_pixmap = QtGui.QPixmap("img/spherebase_help.png")
         help_label.setPixmap(help_pixmap)
 
         layout.addWidget(help_label)
