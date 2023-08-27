@@ -25,7 +25,8 @@ class InputDialog(QtWidgets.QDialog):
             "sph_rad": 0.0,
             "plate_span": 0.0,
             "rect_length": 0.0,
-            "rect_height": 0.0
+            "rect_height": 0.0,
+            "num_base": 1
         }
 
         self.initUI()
@@ -65,7 +66,9 @@ class InputDialog(QtWidgets.QDialog):
         self.accept()
         obj_sphere = SphereBase(dialog.input_vars)
         obj_sphere.draw_vplates()
-        obj_sphere.draw_base()
+        for i in range(1, obj_sphere.num_hplate + 1):
+            obj_sphere.draw_base(i)
+            obj_sphere.center_base = (obj_sphere.center_base[X], obj_sphere.center_base[Y] + obj_sphere.base_size + 3)
         obj_sphere.dwg_new.save()
         path_base = os.getcwd()
         webbrowser.open("file://" + os.path.join(path_base, "lasercut_spherebase.svg"))
@@ -102,6 +105,7 @@ class SphereBase():
         self.ini_rect = {"length": input_results["rect_length"], "height": input_results["rect_height"]}
         self.has_centerplate = False
         self.num_vplate = 0
+        self.num_hplate = int(input_results["num_base"])
         self.list_groove = []
         self.dwg_new = svgwrite.Drawing("lasercut_spherebase.svg", size=("400mm", "300mm"), viewBox=("0 0 400 300"))
 
@@ -109,7 +113,7 @@ class SphereBase():
         org_point = [3, 3]
         arc_center = [org_point[X] + self.sph_center["position"], org_point[Y] + self.sph_center["height"]]
          
-        plate_num = math.ceil((self.base_size - self.plate_thick) / (self.plate_span + self.plate_thick))
+        plate_num = math.ceil((self.base_size - 2 * self.plate_thick) / (self.plate_span + self.plate_thick))
         is_even = plate_num % 2 == 0
         sect_pos = 0
 
@@ -163,8 +167,9 @@ class SphereBase():
     def update_rect_dimension(self, sect_rad):
         newLength = self.ini_rect["length"]
         newHeight = self.ini_rect["height"]
-        if (self.sph_center["position"] - self.ini_rect["length"]) ** 2 + (self.sph_center["height"] - 3 * self.plate_thick) ** 2 < sect_rad ** 2:
-            newLength = -math.sqrt(sect_rad ** 2 - (self.sph_center["height"] - 3 * self.plate_thick) ** 2) + self.sph_center["position"]
+        n = self.num_hplate * 2 + 1
+        if (self.sph_center["position"] - self.ini_rect["length"]) ** 2 + (self.sph_center["height"] - n * self.plate_thick) ** 2 < sect_rad ** 2:
+            newLength = -math.sqrt(sect_rad ** 2 - (self.sph_center["height"] - n * self.plate_thick) ** 2) + self.sph_center["position"]
 
         if (self.sph_center["position"] - self.plate_thick) ** 2 + (self.sph_center["height"] - self.ini_rect["height"]) ** 2 < sect_rad ** 2:
             newHeight = -math.sqrt(sect_rad ** 2 - (self.sph_center["position"] - self.plate_thick) ** 2) + self.sph_center["height"]
@@ -186,18 +191,20 @@ class SphereBase():
         else:
             str_path += " L {0},{1}".format(org_point[X] + rect_dim["length"], org_point[Y] + rect_dim["height"])
         
-        str_path += " L {0},{1}".format(org_point[X] + rect_dim["length"], org_point[Y] + 2 * self.plate_thick) \
-                + " L {0},{1}".format(org_point[X] + rect_dim["length"] / 2, org_point[Y] + 2 * self.plate_thick) \
-                + " L {0},{1}".format(org_point[X] + rect_dim["length"] / 2, org_point[Y] + self.plate_thick) \
-                + " L {0},{1}".format(org_point[X] + rect_dim["length"], org_point[Y] + self.plate_thick) \
-                + " L {0},{1}".format(org_point[X] + rect_dim["length"], org_point[Y]) \
+        for i in reversed(range(1, self.num_hplate + 1)):
+            str_path += " L {0},{1}".format(org_point[X] + rect_dim["length"], org_point[Y] + 2 * i * self.plate_thick) \
+                    + " L {0},{1}".format(org_point[X] + rect_dim["length"] / 2, org_point[Y] + 2 * i * self.plate_thick) \
+                    + " L {0},{1}".format(org_point[X] + rect_dim["length"] / 2, org_point[Y] + (2 * i - 1) * self.plate_thick) \
+                    + " L {0},{1}".format(org_point[X] + rect_dim["length"], org_point[Y] + (2 * i - 1) * self.plate_thick) \
+                
+        str_path += " L {0},{1}".format(org_point[X] + rect_dim["length"], org_point[Y]) \
                 + " L {0},{1}".format(org_point[X], org_point[Y])
 
         path_add = self.dwg_new.path(d=str_path, fill="none", style="stroke:#000000;stroke-width:0.3")
         self.dwg_new.add(path_add)
         return path_add
 
-    def draw_base(self):
+    def draw_base(self, count):
         if self.has_centerplate:
             groove_total = 2 * self.num_vplate - 1
         else:
@@ -239,8 +246,8 @@ class SphereBase():
         path_add = self.dwg_new.path(d=self.str_base_path, fill="none", style="stroke:#000000;stroke-width:0.3")
         self.dwg_new.add(path_add)
 
-        if self.sph_rad > self.sph_center["height"] - self.plate_thick * 1.5:
-            rad_circle = math.sqrt(self.sph_rad ** 2 - (self.sph_center["height"] - self.plate_thick * 1.5) ** 2)
+        if self.sph_rad > self.sph_center["height"] - self.plate_thick * (2 * count - 0.5):
+            rad_circle = math.sqrt(self.sph_rad ** 2 - (self.sph_center["height"] - self.plate_thick * (2 * count - 0.5)) ** 2)
             circle_add = self.dwg_new.circle(center=self.center_base, r=rad_circle, fill="none", style="stroke:#FF0000;stroke-width:0.3")
             self.dwg_new.add(circle_add)
         return path_add
